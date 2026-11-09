@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Survey data checker: programming demo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+:root{--bg:#f6f8fa;--surface:#ffffff;--ink:#14213d;--muted:#566175;--line:#d3dae4;--accent:#0f766e;--accent-ink:#ffffff;--warn:#b42318;--amber:#8a5a00;--ok:#0f766e;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1722;--surface:#17212f;--ink:#e8edf4;--muted:#9fb0c5;--line:#2c3a4d;--accent:#2dd4bf;--accent-ink:#06201d;--warn:#ff8a7a;--amber:#ffd98a;--ok:#2dd4bf;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1722;--surface:#17212f;--ink:#e8edf4;--muted:#9fb0c5;--line:#2c3a4d;--accent:#2dd4bf;--accent-ink:#06201d;--warn:#ff8a7a;--amber:#ffd98a;--ok:#2dd4bf;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:20px 16px 56px}
+h1{font-size:1.65rem;line-height:1.2;margin:4px 0 8px;font-weight:600}
+h2{font-size:1.2rem;margin:28px 0 8px;font-weight:600}
+.lede{color:var(--muted);margin:0 0 16px;max-width:65ch}
+textarea{width:100%;min-height:170px;font:400 13px/1.5 "IBM Plex Mono",ui-monospace,monospace;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;resize:vertical}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button,.filebtn{font:inherit;font-weight:500;border-radius:8px;padding:10px 16px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;display:inline-block}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:8px 0 14px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.stat b{display:block;font-size:1.5rem;line-height:1.2}
+.stat span{color:var(--muted);font-size:14px}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-weight:600;white-space:nowrap}
+td.v{font:400 13px "IBM Plex Mono",ui-monospace,monospace;word-break:break-all}
+.sev{font-weight:600;white-space:nowrap}
+.sev.error{color:var(--warn)}
+.sev.warning{color:var(--amber)}
+.good{color:var(--ok);font-weight:500}
+.note{color:var(--muted);font-size:14px;margin:6px 0}
+ul.rules{margin:6px 0 0;padding-left:20px;font-size:15px}
+ul.rules li{margin:3px 0}
+code{font:400 13px "IBM Plex Mono",ui-monospace,monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Survey data checker</h1>
+  <p class="lede">Paste or load a CSV export from the remote work survey and this tool checks every row against the survey’s rules: required answers, allowed values, number ranges, skip logic, duplicates and formatting. It runs in your browser and sends nothing anywhere.</p>
+
+  <textarea id="input" spellcheck="false" aria-label="CSV data" placeholder="Paste CSV here, starting with the header row"></textarea>
+  <div class="row">
+    <button class="primary" id="run" type="button">Check data</button>
+    <button id="sample" type="button">Load sample data with errors</button>
+    <label class="filebtn" for="file">Open CSV file</label>
+    <input id="file" type="file" accept=".csv,.txt,text/csv" hidden>
+    <button id="clear" type="button">Clear</button>
+  </div>
+
+  <section id="out" hidden>
+    <h2>Result</h2>
+    <div class="stats" id="stats"></div>
+    <p id="verdict" role="status"></p>
+    <div class="scroll"><table id="issues"></table></div>
+    <div class="row"><button id="copy" type="button">Copy issues as CSV</button></div>
+    <p class="note" id="msg" role="status"></p>
+  </section>
+
+  <h2>Rules checked</h2>
+  <ul class="rules">
+    <li>The header must contain all ten expected columns. Extra columns are flagged as a warning.</li>
+    <li>Each row must have the same number of cells as the header, which catches an unquoted comma.</li>
+    <li><code>response_id</code> is a whole number and unique. <code>submitted_at</code> is a valid date.</li>
+    <li><code>remote_status</code> is required and must be one of the three allowed answers.</li>
+    <li><code>remote_days</code> and <code>tools</code> are required and valid for “Yes, fully remote” or “Hybrid”, and must be blank otherwise.</li>
+    <li><code>remote_interest</code> is required for “No, on site” and must be blank otherwise.</li>
+    <li><code>internet</code> is required, from 1 to 5. <code>contact_ok</code> is required, Yes or No.</li>
+    <li><code>email</code> is required and valid when <code>contact_ok</code> is Yes, and must be blank when it is No.</li>
+    <li><code>comments</code> has a 200 character limit. Rows that repeat another row’s answers are flagged as a warning.</li>
+  </ul>
+</div>
+
+<script>
+var COLS = ["response_id","submitted_at","remote_status","remote_days","remote_interest","tools","internet","contact_ok","email","comments"];
+var REMOTE = ["Yes, fully remote","Hybrid"];
+var STATUS = REMOTE.concat(["No, on site"]);
+var TOOLS = ["Email","Video calls","Chat apps","Shared documents","Project boards"];
+var issues = [];
+
+var SAMPLE = [
+ 'response_id,submitted_at,remote_status,remote_days,remote_interest,tools,internet,contact_ok,email,comments',
+ '1,2026-11-09T08:00:00Z,"Yes, fully remote",4,,Email|Video calls,5,Yes,a.nkosi@example.com,Works well for me',
+ '2,2026-11-09T08:10:00Z,Hybrid,6,,Email,4,No,,',
+ '3,2026-11-09T08:20:00Z,"No, on site",,Maybe,,3,Yes,not-an-email,',
+ '4,2026-11-09T08:30:00Z,"No, on site",3,No,,2,No,,',
+ '5,2026-11-09T08:40:00Z,Hybrid,2,,Chat apps|Fax,5,No,,',
+ '1,2026-11-09T08:50:00Z,"Yes, fully remote",5,,Email,5,Yes,,',
+ '7,2026-11-09T09:00:00Z,"Yes, fully remote",3,,Project boards,4,No,,',
+ '8,2026-11-09T09:10:00Z,Yes fully remote,3,,Email,4,No,,'
+].join("\n");
+
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+
+function parseCSV(text){
+  var rows=[], row=[], cur="", inQ=false, i, ch;
+  text = text.replace(/^\uFEFF/,"");
+  for(i=0;i<text.length;i++){
+    ch = text[i];
+    if(inQ){
+      if(ch==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else inQ=false; }
+      else cur+=ch;
+    } else if(ch==='"'){ inQ=true; }
+    else if(ch===","){ row.push(cur); cur=""; }
+    else if(ch==="\n"||ch==="\r"){
+      if(ch==="\r"&&text[i+1]==="\n") i++;
+      row.push(cur); rows.push(row); row=[]; cur="";
+    } else cur+=ch;
+  }
+  if(cur!==""||row.length){ row.push(cur); rows.push(row); }
+  return rows;
+}
+
+function blank(v){return v===undefined||String(v).trim()==="";}
+function add(rowNum,id,col,sev,msg,val){issues.push({row:rowNum,id:id,col:col,sev:sev,msg:msg,val:val===undefined?"":val});}
+
+function runChecks(table){
+  issues = [];
+  var header = table[0].map(function(h){return h.trim();});
+  var missing = COLS.filter(function(c){return header.indexOf(c)<0;});
+  if(missing.length){ add(1,"","header","error","Missing column(s): "+missing.join(", ")+".",""); return {total:0,badRows:0}; }
+  header.filter(function(c){return COLS.indexOf(c)<0;}).forEach(function(c){add(1,"",c,"warning","Unexpected column, not part of this survey.","");});
+
+  var seenId = {}, seenRow = {}, bad = {}, total = 0;
+  table.slice(1).forEach(function(cells,idx){
+    if(cells.every(blank)) return;
+    total++;
+    var n = idx+2, r = {};
+    if(cells.length!==header.length){
+      add(n,cells[0],"row","error","Row has "+cells.length+" cells but the header has "+header.length+". Check for an unquoted comma.",cells.join(","));
+      bad[n]=true; return;
+    }
+    header.forEach(function(h,i){r[h]=cells[i].trim();});
+    var id = r.response_id;
+    function err(col,msg){add(n,id,col,"error",msg,r[col]);bad[n]=true;}
+
+    if(blank(id)) err("response_id","Required.");
+    else if(!/^\d+$/.test(id)) err("response_id","Must be a whole number.");
+    else if(seenId[id]) err("response_id","Duplicate of the row on line "+seenId[id]+".");
+    else seenId[id]=n;
+
+    if(blank(r.submitted_at)) err("submitted_at","Required.");
+    else if(isNaN(Date.parse(r.submitted_at))) err("submitted_at","Not a valid date.");
+
+    var st = r.remote_status, isRemote = REMOTE.indexOf(st)>-1, isSite = st==="No, on site";
+    if(blank(st)) err("remote_status","Required.");
+    else if(STATUS.indexOf(st)<0) err("remote_status","Not an allowed answer. Use: "+STATUS.join(" / ")+".");
+
+    if(isRemote){
+      if(blank(r.remote_days)) err("remote_days","Required for remote and hybrid.");
+      else if(!/^\d+$/.test(r.remote_days)||+r.remote_days<1||+r.remote_days>5) err("remote_days","Must be a whole number from 1 to 5.");
+      if(blank(r.tools)) err("tools","Required for remote and hybrid.");
+      else r.tools.split("|").forEach(function(t){ if(TOOLS.indexOf(t.trim())<0) err("tools","“"+t+"” is not an allowed tool."); });
+    } else if(STATUS.indexOf(st)>-1){
+      if(!blank(r.remote_days)) err("remote_days","Should be blank. This question is skipped for on-site workers.");
+      if(!blank(r.tools)) err("tools","Should be blank. This question is skipped for on-site workers.");
+    }
+    if(isSite){
+      if(blank(r.remote_interest)) err("remote_interest","Required for on-site workers.");
+      else if(["Yes","Maybe","No"].indexOf(r.remote_interest)<0) err("remote_interest","Must be Yes, Maybe or No.");
+    } else if(STATUS.indexOf(st)>-1 && !blank(r.remote_interest)) err("remote_interest","Should be blank. Only on-site workers see this question.");
+
+    if(blank(r.internet)) err("internet","Required.");
+    else if(["1","2","3","4","5"].indexOf(r.internet)<0) err("internet","Must be a whole number from 1 to 5.");
+
+    if(blank(r.contact_ok)) err("contact_ok","Required.");
+    else if(["Yes","No"].indexOf(r.contact_ok)<0) err("contact_ok","Must be Yes or No.");
+    else if(r.contact_ok==="Yes"){
+      if(blank(r.email)) err("email","Required when contact_ok is Yes.");
+      else if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(r.email)) err("email","Not a valid email address.");
+    } else if(!blank(r.email)) err("email","Should be blank when contact_ok is No.");
+
+    if(r.comments.length>200) err("comments","Over the 200 character limit by "+(r.comments.length-200)+".");
+
+    var key = header.filter(function(h){return h!=="response_id"&&h!=="submitted_at";}).map(function(h){return r[h];}).join("¦");
+    if(seenRow[key]) add(n,id,"row","warning","Same answers as the row on line "+seenRow[key]+". Possible duplicate respondent.","");
+    else seenRow[key]=n;
+  });
+  return {total:total,badRows:Object.keys(bad).length};
+}
+
+function render(res){
+  var errs = issues.filter(function(i){return i.sev==="error";}).length;
+  var warns = issues.length-errs;
+  var clean = res.total-res.badRows;
+  document.getElementById("out").hidden = false;
+  document.getElementById("stats").innerHTML =
+    '<div class="stat"><b>'+res.total+'</b><span>rows checked</span></div>'+
+    '<div class="stat"><b>'+clean+'</b><span>rows with no errors</span></div>'+
+    '<div class="stat"><b>'+errs+'</b><span>errors</span></div>'+
+    '<div class="stat"><b>'+warns+'</b><span>warnings</span></div>';
+  var v = document.getElementById("verdict");
+  v.className = issues.length? "" : "good";
+  v.textContent = issues.length ? "Fix the errors below, then check again. Line numbers count the header as line 1." : "All rows passed every check.";
+  var t = document.getElementById("issues");
+  if(!issues.length){ t.innerHTML=""; return; }
+  t.innerHTML = "<tr><th>Line</th><th>ID</th><th>Column</th><th>Level</th><th>Problem</th><th>Value</th></tr>" +
+    issues.map(function(i){
+      return "<tr><td>"+i.row+"</td><td>"+esc(i.id)+"</td><td>"+esc(i.col)+'</td><td class="sev '+i.sev+'">'+i.sev+"</td><td>"+esc(i.msg)+'</td><td class="v">'+esc(i.val)+"</td></tr>";
+    }).join("");
+}
+
+function cell(v){var s=String(v);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+
+document.getElementById("run").addEventListener("click",function(){
+  var text = document.getElementById("input").value.trim();
+  if(!text){ document.getElementById("out").hidden=true; document.getElementById("input").focus(); return; }
+  render(runChecks(parseCSV(text)));
+  document.getElementById("out").scrollIntoView({behavior:"smooth",block:"start"});
+});
+document.getElementById("sample").addEventListener("click",function(){
+  document.getElementById("input").value = SAMPLE;
+  document.getElementById("run").click();
+});
+document.getElementById("clear").addEventListener("click",function(){
+  document.getElementById("input").value=""; document.getElementById("out").hidden=true; issues=[];
+});
+document.getElementById("file").addEventListener("change",function(e){
+  var f = e.target.files[0]; if(!f) return;
+  var rd = new FileReader();
+  rd.onload = function(){ document.getElementById("input").value = rd.result; document.getElementById("run").click(); };
+  rd.readAsText(f);
+});
+document.getElementById("copy").addEventListener("click",function(){
+  var lines = ["line,response_id,column,level,problem,value"].concat(issues.map(function(i){return [i.row,i.id,i.col,i.sev,i.msg,i.val].map(cell).join(",");}));
+  var m = document.getElementById("msg");
+  try{ navigator.clipboard.writeText(lines.join("\n")).then(function(){m.textContent="Copied.";},function(){m.textContent="Copy was blocked. Select the table and copy it by hand.";}); }
+  catch(err){ m.textContent="Copy was blocked. Select the table and copy it by hand."; }
+});
+</script>
+</body>
+</html>

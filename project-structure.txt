@@ -1,0 +1,13 @@
+teacher-portal/
+├── pom.xml
+└── src/main/
+    ├── java/com/example/portal/
+    │   ├── PortalApplication.java
+    │   ├── ApiController.java
+    │   ├── Student.java
+    │   ├── Grade.java
+    │   ├── StudentRepository.java
+    │   └── GradeRepository.java
+    └── resources/
+        ├── application.properties
+        └── static/index.html

@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Remote Work Survey: programming demo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+:root{--bg:#f6f8fa;--surface:#ffffff;--ink:#14213d;--muted:#566175;--line:#d3dae4;--accent:#0f766e;--accent-ink:#ffffff;--warn:#b42318;--note:#fff1c9;--note-ink:#5e4200;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1722;--surface:#17212f;--ink:#e8edf4;--muted:#9fb0c5;--line:#2c3a4d;--accent:#2dd4bf;--accent-ink:#06201d;--warn:#ff8a7a;--note:#3a2f10;--note-ink:#ffd98a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1722;--surface:#17212f;--ink:#e8edf4;--muted:#9fb0c5;--line:#2c3a4d;--accent:#2dd4bf;--accent-ink:#06201d;--warn:#ff8a7a;--note:#3a2f10;--note-ink:#ffd98a;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:20px 16px 56px}
+h1{font-size:1.65rem;line-height:1.2;margin:4px 0 8px;font-weight:600}
+h2{font-size:1.2rem;margin:32px 0 8px;font-weight:600}
+.lede{color:var(--muted);margin:0 0 16px;max-width:60ch}
+.toolbar{display:flex;gap:12px;align-items:center;margin:0 0 16px;font-size:15px}
+.toolbar label{display:flex;gap:8px;align-items:center;cursor:pointer}
+.q{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:0 0 12px;min-width:0}
+.q[hidden]{display:none}
+.q legend,.q .lab{font-weight:500;padding:0;margin:0 0 8px;display:block}
+.hint{color:var(--muted);font-size:14px;margin:-4px 0 8px}
+.opt{display:flex;gap:10px;align-items:center;padding:6px 0;cursor:pointer}
+input[type=radio],input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);margin:0}
+input[type=text],input[type=email],input[type=number],textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+textarea{min-height:90px;resize:vertical}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.rule{display:none;font:400 12px/1.45 "IBM Plex Mono",ui-monospace,monospace;color:var(--note-ink);background:var(--note);padding:6px 8px;border-radius:6px;margin-top:10px}
+body.test .rule{display:block}
+.err{color:var(--warn);font-size:14px;margin:6px 0 0}
+.count{color:var(--muted);font-size:13px;text-align:right;margin-top:4px}
+button{font:inherit;font-weight:500;border-radius:8px;padding:10px 16px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font-weight:600}
+td.blank{color:var(--muted)}
+pre{margin:0;padding:12px;font:400 13px/1.5 "IBM Plex Mono",ui-monospace,monospace;overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.check{margin:8px 0 0;color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Remote work survey</h1>
+  <p class="lede">A small working survey that shows branching, input validation and a clean data export. Built by Thamsanqa Gwizi in plain HTML and JavaScript. It uses made-up answers only and stores nothing outside this page.</p>
+  <div class="toolbar"><label><input type="checkbox" id="testMode"> Show routing rules (test mode)</label></div>
+
+  <form id="survey" novalidate></form>
+  <div class="row"><button type="submit" form="survey" class="primary">Submit response</button><button type="button" id="resetBtn">Clear form</button></div>
+
+  <section id="results" hidden>
+    <h2>Collected responses</h2>
+    <p class="check" id="summary"></p>
+    <div class="scroll"><table id="tbl"></table></div>
+    <h2>CSV export</h2>
+    <p class="check">Skipped questions stay blank by design. Multiple choices are joined with a vertical bar.</p>
+    <pre id="csv"></pre>
+    <div class="row"><button type="button" id="copyCsv">Copy CSV</button><button type="button" id="copyJson">Copy JSON</button><button type="button" id="clearAll">Delete all responses</button></div>
+    <p class="check" id="copyMsg" role="status"></p>
+  </section>
+</div>
+
+<script>
+var YES_REMOTE = ["Yes, fully remote", "Hybrid"];
+var Q = [
+  {id:"remote_status", label:"Do you currently work remotely?", type:"radio", options:["Yes, fully remote","Hybrid","No, on site"], required:true,
+   rule:"Always shown."},
+  {id:"remote_days", label:"On how many days a week do you work remotely?", type:"number", min:1, max:5, required:true,
+   show:function(a){return YES_REMOTE.indexOf(a.remote_status)>-1;},
+   rule:"Shown if remote_status is “Yes, fully remote” or “Hybrid”. Check: whole number from 1 to 5."},
+  {id:"remote_interest", label:"Would you like to work remotely?", type:"radio", options:["Yes","Maybe","No"], required:true,
+   show:function(a){return a.remote_status==="No, on site";},
+   rule:"Shown if remote_status is “No, on site”."},
+  {id:"tools", label:"Which tools do you use every day?", type:"checkbox", options:["Email","Video calls","Chat apps","Shared documents","Project boards"], required:true,
+   show:function(a){return YES_REMOTE.indexOf(a.remote_status)>-1;},
+   rule:"Shown for remote and hybrid answers. Check: pick at least one."},
+  {id:"internet", label:"How reliable is your internet connection?", hint:"1 is unreliable, 5 is very reliable.", type:"radio", options:["1","2","3","4","5"], required:true,
+   show:function(a){return !!a.remote_status;},
+   rule:"Shown once remote_status is answered."},
+  {id:"contact_ok", label:"May we contact you about your answers?", type:"radio", options:["Yes","No"], required:true,
+   show:function(a){return !!a.internet;},
+   rule:"Shown once internet is answered."},
+  {id:"email", label:"Email address", type:"email", required:true,
+   show:function(a){return a.contact_ok==="Yes";},
+   rule:"Shown if contact_ok is “Yes”. Check: valid email format."},
+  {id:"comments", label:"Anything else you would like to add?", type:"textarea", max:200, required:false,
+   show:function(a){return !!a.contact_ok;},
+   rule:"Shown once contact_ok is answered. Optional. Check: 200 characters maximum."}
+];
+
+var form = document.getElementById("survey");
+var responses = [];
+var ans = {};
+
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+
+function build(){
+  var html = "";
+  Q.forEach(function(q){
+    html += '<div class="q" data-q="'+q.id+'" hidden>';
+    if(q.type==="radio"||q.type==="checkbox"){
+      html += '<fieldset style="border:0;padding:0;margin:0"><legend>'+esc(q.label)+'</legend>';
+      if(q.hint) html += '<p class="hint">'+esc(q.hint)+'</p>';
+      q.options.forEach(function(o,i){
+        html += '<label class="opt"><input type="'+q.type+'" name="'+q.id+'" value="'+esc(o)+'"> '+esc(o)+'</label>';
+      });
+      html += '</fieldset>';
+    } else {
+      html += '<label class="lab" for="f_'+q.id+'">'+esc(q.label)+(q.required?'':' (optional)')+'</label>';
+      if(q.type==="textarea") html += '<textarea id="f_'+q.id+'" name="'+q.id+'" maxlength="'+(q.max+50)+'"></textarea><div class="count" id="c_'+q.id+'">0 / '+q.max+'</div>';
+      else html += '<input id="f_'+q.id+'" name="'+q.id+'" type="'+(q.type==="number"?"number":q.type)+'"'+(q.type==="number"?' inputmode="numeric" step="1" min="'+q.min+'" max="'+q.max+'"':'')+(q.type==="email"?' autocomplete="off"':'')+'>';
+    }
+    html += '<div class="err" role="alert" id="e_'+q.id+'"></div>';
+    html += '<div class="rule">'+esc(q.id)+': '+esc(q.rule)+'</div></div>';
+  });
+  form.innerHTML = html;
+}
+
+function box(q){return form.querySelector('[data-q="'+q.id+'"]');}
+
+function read(q){
+  var b = box(q);
+  if(q.type==="radio"){var r=b.querySelector("input:checked");return r?r.value:"";}
+  if(q.type==="checkbox"){return Array.prototype.map.call(b.querySelectorAll("input:checked"),function(i){return i.value;});}
+  return b.querySelector("input,textarea").value.trim();
+}
+
+function clear(q){
+  var b = box(q);
+  Array.prototype.forEach.call(b.querySelectorAll("input,textarea"),function(i){
+    if(i.type==="radio"||i.type==="checkbox") i.checked=false; else i.value="";
+  });
+  b.querySelector(".err").textContent="";
+}
+
+function route(){
+  ans = {};
+  Q.forEach(function(q){
+    var visible = q.show ? q.show(ans) : true;
+    var b = box(q);
+    if(!visible){ if(!b.hidden) clear(q); b.hidden = true; return; }
+    b.hidden = false;
+    ans[q.id] = read(q);
+  });
+  var t = document.getElementById("c_comments");
+  if(t) t.textContent = (ans.comments||"").length + " / 200";
+}
+
+function check(q,v){
+  var empty = Array.isArray(v) ? v.length===0 : v==="";
+  if(empty) return q.required ? (q.type==="checkbox" ? "Pick at least one option." : (q.type==="radio" ? "Choose one option." : "Enter an answer.")) : "";
+  if(q.type==="number"){
+    var n = Number(v);
+    if(!Number.isInteger(n) || n<q.min || n>q.max) return "Enter a whole number from "+q.min+" to "+q.max+".";
+  }
+  if(q.type==="email" && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return "Enter a valid email address, like name@example.com.";
+  if(q.type==="textarea" && v.length>q.max) return "Keep this under "+q.max+" characters. You are "+(v.length-q.max)+" over.";
+  return "";
+}
+
+function csvCell(v){
+  var s = Array.isArray(v) ? v.join("|") : (v==null?"":String(v));
+  return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+
+function render(){
+  var res = document.getElementById("results");
+  res.hidden = responses.length===0;
+  if(!responses.length) return;
+  var cols = ["response_id","submitted_at"].concat(Q.map(function(q){return q.id;}));
+  var skipped = 0;
+  var head = "<tr>"+cols.map(function(c){return "<th>"+esc(c)+"</th>";}).join("")+"</tr>";
+  var rows = responses.map(function(r){
+    return "<tr>"+cols.map(function(c){
+      var v = r[c];
+      var blank = v===undefined||v===""||(Array.isArray(v)&&!v.length);
+      if(blank && c!=="response_id" && c!=="submitted_at") skipped++;
+      var text = Array.isArray(v)?v.join("|"):(v==null?"":v);
+      return '<td class="'+(blank?"blank":"")+'">'+(blank?"(skipped)":esc(text))+"</td>";
+    }).join("")+"</tr>";
+  }).join("");
+  document.getElementById("tbl").innerHTML = head+rows;
+  document.getElementById("summary").textContent = responses.length+" response"+(responses.length===1?"":"s")+" collected. "+skipped+" blank cells come from questions the routing skipped or optional answers left empty.";
+  var lines = [cols.join(",")].concat(responses.map(function(r){return cols.map(function(c){return csvCell(r[c]);}).join(",");}));
+  document.getElementById("csv").textContent = lines.join("\n");
+}
+
+function say(msg){var m=document.getElementById("copyMsg");m.textContent=msg;}
+function copy(text){
+  try{
+    navigator.clipboard.writeText(text).then(function(){say("Copied.");},function(){say("Copy was blocked. Select the text and copy it by hand.");});
+  }catch(e){say("Copy was blocked. Select the text and copy it by hand.");}
+}
+
+form.addEventListener("input",route);
+form.addEventListener("change",route);
+form.addEventListener("submit",function(ev){
+  ev.preventDefault();
+  route();
+  var first = null;
+  Q.forEach(function(q){
+    var b = box(q);
+    if(b.hidden) return;
+    var msg = check(q, ans[q.id]);
+    b.querySelector(".err").textContent = msg;
+    if(msg && !first) first = b;
+  });
+  if(first){ var f = first.querySelector("input,textarea"); if(f) f.focus(); return; }
+  var rec = {response_id: responses.length+1, submitted_at: new Date().toISOString()};
+  Q.forEach(function(q){ if(!box(q).hidden) rec[q.id] = ans[q.id]; });
+  responses.push(rec);
+  form.reset(); route(); render();
+  document.getElementById("results").scrollIntoView({behavior:"smooth",block:"start"});
+});
+
+document.getElementById("testMode").addEventListener("change",function(e){document.body.classList.toggle("test",e.target.checked);});
+document.getElementById("resetBtn").addEventListener("click",function(){form.reset();route();});
+document.getElementById("copyCsv").addEventListener("click",function(){copy(document.getElementById("csv").textContent);});
+document.getElementById("copyJson").addEventListener("click",function(){copy(JSON.stringify(responses,null,2));});
+document.getElementById("clearAll").addEventListener("click",function(){responses=[];render();say("");});
+
+build(); route();
+</script>
+</body>
+</html>
